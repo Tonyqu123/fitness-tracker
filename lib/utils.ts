@@ -1,6 +1,7 @@
 "use client"
 
 import { WorkoutWithExercise } from "@/db/dao/workoutDao"
+import { getWorkouts } from "./data";
 
 // Simple className utility that doesn't depend on external packages
 export function cn(...classes: (string | undefined | null | false)[]) {
@@ -164,11 +165,23 @@ export async function getMonthlyWorkoutData() {
     }
 
     const weekWorkouts = allWorkouts.filter((workout) => {
-      const workoutDate = new Date(workout.date)
-      return workoutDate >= weekStart && workoutDate <= weekEnd
+      try {
+        const workoutDate = new Date(workout.date)
+        return !isNaN(workoutDate.getTime()) && workoutDate >= weekStart && workoutDate <= weekEnd
+      } catch (error) {
+        console.error("Error filtering workout:", workout, error)
+        return false
+      }
     })
 
-    const totalWeight = weekWorkouts.reduce((sum, workout) => sum + workout.weight * workout.reps, 0)
+    const totalWeight = weekWorkouts.reduce((sum, workout) => {
+      try {
+        return sum + (Number(workout.weight) * Number(workout.reps))
+      } catch (error) {
+        console.error("Error calculating weight:", workout, error)
+        return sum
+      }
+    }, 0)
 
     result.push({
       name: `第${i + 1}周`,

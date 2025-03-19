@@ -18,6 +18,8 @@ export default function MonthlyChart() {
         setMonthData(data)
       } catch (error) {
         console.error("Failed to fetch monthly data:", error)
+        // Still set empty data to avoid infinite loading state
+        setMonthData([])
       } finally {
         setLoading(false)
       }
