@@ -19,7 +19,14 @@ export function formatDate(date: Date): string {
 // 获取当天的训练统计数据
 export async function getDailyWorkoutStats() {
   try {
-    const response = await fetch(`/api/workouts/stats?date=${new Date().toISOString()}`, {
+    // Create a valid date object and format it safely
+    const currentDate = new Date();
+    // Use a safer date format string rather than directly calling toISOString
+    const dateParam = encodeURIComponent(currentDate.toISOString());
+    
+    console.log('Fetching daily stats with date:', dateParam);
+    
+    const response = await fetch(`/api/workouts/stats?date=${dateParam}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -27,7 +34,9 @@ export async function getDailyWorkoutStats() {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to fetch daily stats');
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Failed response from stats API:', response.status, errorData);
+      throw new Error(`Failed to fetch daily stats: ${response.status}`);
     }
 
     const data = await response.json();
@@ -56,8 +65,14 @@ export async function getWeeklyWorkoutData() {
   weekAgo.setDate(weekAgo.getDate() - 6)
 
   try {
+    // 格式化日期，避免直接使用toISOString
+    const startDateParam = encodeURIComponent(weekAgo.toISOString());
+    const endDateParam = encodeURIComponent(new Date().toISOString());
+    
+    console.log('Fetching weekly data with date range:', { startDateParam, endDateParam });
+    
     // 获取过去一周的训练记录
-    const response = await fetch(`/api/workouts?startDate=${weekAgo.toISOString()}&endDate=${new Date().toISOString()}`, {
+    const response = await fetch(`/api/workouts?startDate=${startDateParam}&endDate=${endDateParam}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -65,33 +80,44 @@ export async function getWeeklyWorkoutData() {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to fetch weekly workout data');
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Failed response from workouts API:', response.status, errorData);
+      throw new Error(`Failed to fetch weekly workout data: ${response.status}`);
     }
 
     const data = await response.json();
-    const allWorkouts: WorkoutWithExercise[] = data.workouts;
+    const allWorkouts = data.workouts;
 
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today)
       date.setDate(date.getDate() - i)
       
+      // Safely convert date objects
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+      
       const dayWorkouts = allWorkouts.filter((workout) => {
-        const workoutDate = new Date(workout.date)
-        workoutDate.setHours(0, 0, 0, 0)
-        return workoutDate.getTime() === date.getTime()
-      })
+        try {
+          const workoutDate = new Date(workout.date);
+          workoutDate.setHours(0, 0, 0, 0);
+          return workoutDate.getTime() === targetDate.getTime();
+        } catch (error) {
+          console.error('Error parsing workout date:', workout.date, error);
+          return false;
+        }
+      });
 
-      const dayOfWeek = date.getDay()
-      const value = dayWorkouts.reduce((sum, workout) => sum + workout.weight, 0)
+      const dayOfWeek = date.getDay();
+      const value = dayWorkouts.reduce((sum, workout) => sum + workout.weight, 0);
 
       result.push({
         day: dayNames[dayOfWeek],
         date: date.toISOString().split("T")[0], // YYYY-MM-DD format
         value: Math.max(value, 0), // Ensure non-negative value
-      })
+      });
     }
 
-    return result
+    return result;
   } catch (error) {
     console.error('Error fetching weekly workout data:', error);
     
@@ -106,10 +132,10 @@ export async function getWeeklyWorkoutData() {
         day: dayNames[dayOfWeek],
         date: date.toISOString().split("T")[0],
         value: 0,
-      })
+      });
     }
     
-    return result
+    return result;
   }
 }
 

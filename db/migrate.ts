@@ -1,36 +1,35 @@
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import pg from 'pg';
 import { resolve } from 'path';
-import { existsSync, mkdirSync, readFileSync } from 'fs';
 
-// 确保数据库文件目录存在
-const dbDir = resolve(process.cwd(), '.data');
-if (!existsSync(dbDir)) {
-  mkdirSync(dbDir, { recursive: true });
+const { Pool } = pg;
+
+async function main() {
+  // 数据库连接配置
+  const pool = new Pool({
+    host: 'localhost',
+    port: 5432,
+    user: 'fitness',
+    password: 'password',
+    database: 'fitness',
+  });
+
+  try {
+    // 初始化drizzle
+    const db = drizzle(pool);
+    console.log('Running migrations...');
+    
+    // 执行迁移
+    await migrate(db, { migrationsFolder: 'db/migrations' });
+    
+    console.log('Migrations completed!');
+  } catch (error) {
+    console.error('Error during migration:', error);
+    process.exit(1);
+  } finally {
+    await pool.end();
+  }
 }
 
-// 数据库文件路径
-const dbPath = resolve(dbDir, 'fitness.db');
-console.log(`Database path: ${dbPath}`);
-
-// 初始化数据库连接
-try {
-  const sqlite = new Database(dbPath);
-  const db = drizzle(sqlite);
-
-  console.log('Running migrations...');
-  
-  // 读取SQL迁移文件
-  const migrationSQL = readFileSync(resolve(process.cwd(), 'db/migrations/0001_create_tables.sql'), 'utf8');
-  
-  // 执行SQL语句
-  sqlite.exec(migrationSQL);
-  
-  console.log('Migrations completed!');
-
-  // 关闭数据库连接
-  sqlite.close();
-} catch (error) {
-  console.error('Error during migration:', error);
-  process.exit(1);
-} 
+main(); 

@@ -1,30 +1,30 @@
 #!/bin/bash
 
-# 数据库文件路径
-DB_PATH="./.data/fitness.db"
+# 颜色定义
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
 
-echo "Seeding exercises data..."
+echo "=============================="
+echo -e "${YELLOW}开始填充训练动作数据${NC}"
+echo "=============================="
 
-# 检查exercises表是否已经有数据
-EXERCISES_COUNT=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM exercises;")
-
-if [ "$EXERCISES_COUNT" -eq "0" ]; then
-  # 插入初始训练动作数据
-  sqlite3 "$DB_PATH" <<EOF
-  INSERT INTO exercises (id, name, category) VALUES 
-    ('bench-press', '卧推', '胸部'),
-    ('squat', '深蹲', '腿部'),
-    ('deadlift', '硬拉', '背部'),
-    ('pull-up', '引体向上', '背部'),
-    ('shoulder-press', '肩推', '肩部'),
-    ('barbell-row', '杠铃划船', '背部'),
-    ('leg-press', '腿推', '腿部'),
-    ('bicep-curl', '二头弯举', '手臂');
-EOF
-  
-  echo "Inserted 8 exercises."
-else
-  echo "Exercises already seeded, skipping..."
+# 检查PostgreSQL容器是否运行
+if ! docker ps | grep -q postgres; then
+  echo -e "${RED}错误: PostgreSQL容器未运行${NC}"
+  echo "请先运行数据库容器: docker-compose up -d"
+  exit 1
 fi
 
-echo "Seeding completed!" 
+# 运行数据库填充脚本
+echo -e "${YELLOW}运行填充脚本...${NC}"
+if npx tsx ./db/seed.ts; then
+  echo -e "${GREEN}✓ 数据填充成功!${NC}"
+else
+  echo -e "${RED}✗ 数据填充失败!${NC}"
+  exit 1
+fi
+
+echo "=============================="
+exit 0 

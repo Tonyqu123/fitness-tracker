@@ -1,24 +1,22 @@
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import { resolve } from 'path';
-import { existsSync, mkdirSync } from 'fs';
 
-// 确保数据库文件目录存在
-const dbDir = resolve(process.cwd(), '.data');
-if (!existsSync(dbDir)) {
-  mkdirSync(dbDir, { recursive: true });
-}
+// 初始化PostgreSQL连接池
+const pool = new Pool({
+  host: 'localhost',
+  port: 5432,
+  user: 'fitness',
+  password: 'password',
+  database: 'fitness',
+});
 
-// 数据库文件路径
-const dbPath = resolve(dbDir, 'fitness.db');
-
-// 初始化数据库连接
-const sqlite = new Database(dbPath);
-export const db = drizzle(sqlite);
+// 初始化Drizzle ORM
+export const db = drizzle(pool);
 
 // 关闭数据库连接的方法，用于在应用关闭时调用
-export function closeDb() {
-  sqlite.close();
+export async function closeDb() {
+  await pool.end();
 }
 
 // 导出一个获取数据库连接的函数，可用于服务器组件
