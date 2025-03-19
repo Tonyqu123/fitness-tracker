@@ -1,0 +1,17 @@
+<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+  <filter id="noise">
+    <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/>
+    <feColorMatrix type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.5 0"/>
+  </filter>
+  <rect width="400" height="400" filter="url(#noise)" opacity="0.5"/>
+  <g fill="none" stroke="#ffffff" stroke-width="1" opacity="0.15">
+    <path d="M0,50 H400" />
+    <path d="M0,100 H400" />
+    <path d="M0,150 H400" />
+    <path d="M0,200 H400" />
+    <path d="M0,250 H400" />
+    <path d="M0,300 H400" />
+    <path d="M0,350 H400" />
+  </g>
+</svg>
+
