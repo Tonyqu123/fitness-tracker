@@ -106,7 +106,7 @@ export async function getWeeklyWorkoutData() {
       const targetDate = new Date(date);
       targetDate.setHours(0, 0, 0, 0);
       
-      const dayWorkouts = allWorkouts.filter((workout) => {
+      const dayWorkouts = allWorkouts.filter((workout: any) => {
         try {
           const workoutDate = new Date(workout.date);
           workoutDate.setHours(0, 0, 0, 0);
@@ -118,12 +118,14 @@ export async function getWeeklyWorkoutData() {
       });
 
       const dayOfWeek = date.getDay();
-      const value = dayWorkouts.reduce((sum, workout) => sum + workout.weight, 0);
+      const totalWeight = dayWorkouts.reduce((sum: number, workout: any) => sum + workout.weight, 0);
+      const totalSets = dayWorkouts.length;
 
       result.push({
-        day: dayNames[dayOfWeek],
+        dayName: dayNames[dayOfWeek],
         date: date.toISOString().split("T")[0], // YYYY-MM-DD format
-        value: Math.max(value, 0), // Ensure non-negative value
+        totalWeight: Math.max(totalWeight, 0), // Ensure non-negative value
+        totalSets: totalSets
       });
     }
 
@@ -139,9 +141,10 @@ export async function getWeeklyWorkoutData() {
       const dayOfWeek = date.getDay()
       
       result.push({
-        day: dayNames[dayOfWeek],
+        dayName: dayNames[dayOfWeek],
         date: date.toISOString().split("T")[0],
-        value: 0,
+        totalWeight: 0,
+        totalSets: 0
       });
     }
     
@@ -150,133 +153,306 @@ export async function getWeeklyWorkoutData() {
 }
 
 export async function getMonthlyWorkoutData() {
-  const allWorkouts = await getWorkouts()
   const today = new Date()
   const currentMonth = today.getMonth()
   const currentYear = today.getFullYear()
 
-  const result = []
-
-  // Get the number of weeks in the current month
+  // Calculate first and last day of the month
   const firstDay = new Date(currentYear, currentMonth, 1)
   const lastDay = new Date(currentYear, currentMonth + 1, 0)
-  const totalDays = lastDay.getDate()
-  const totalWeeks = Math.ceil(totalDays / 7)
+  
+  try {
+    // Format dates for API call
+    const startDateParam = encodeURIComponent(firstDay.toISOString());
+    const endDateParam = encodeURIComponent(lastDay.toISOString());
+    
+    console.log('Fetching monthly data with date range:', { startDateParam, endDateParam });
+    
+    // Fetch workouts for the current month
+    const response = await fetch(`/api/workouts?startDate=${startDateParam}&endDate=${endDateParam}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-  for (let i = 0; i < totalWeeks; i++) {
-    const weekStart = new Date(firstDay)
-    weekStart.setDate(weekStart.getDate() + i * 7)
-
-    const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekEnd.getDate() + 6)
-    if (weekEnd > lastDay) {
-      weekEnd.setTime(lastDay.getTime())
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Failed response from workouts API:', response.status, errorData);
+      throw new Error(`Failed to fetch monthly workout data: ${response.status}`);
     }
 
-    const weekWorkouts = allWorkouts.filter((workout) => {
-      try {
-        const workoutDate = new Date(workout.date)
-        return !isNaN(workoutDate.getTime()) && workoutDate >= weekStart && workoutDate <= weekEnd
-      } catch (error) {
-        console.error("Error filtering workout:", workout, error)
-        return false
-      }
-    })
+    const data = await response.json();
+    const allWorkouts = data.workouts;
+    
+    const result = []
+    const totalDays = lastDay.getDate()
+    const totalWeeks = Math.ceil(totalDays / 7)
 
-    const totalWeight = weekWorkouts.reduce((sum, workout) => {
-      try {
-        return sum + (Number(workout.weight) * Number(workout.reps))
-      } catch (error) {
-        console.error("Error calculating weight:", workout, error)
-        return sum
-      }
-    }, 0)
+    for (let i = 0; i < totalWeeks; i++) {
+      const weekStart = new Date(firstDay)
+      weekStart.setDate(weekStart.getDate() + i * 7)
 
-    result.push({
-      name: `第${i + 1}周`,
-      value: totalWeight,
-    })
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekEnd.getDate() + 6)
+      if (weekEnd > lastDay) {
+        weekEnd.setTime(lastDay.getTime())
+      }
+
+      const weekWorkouts = allWorkouts.filter((workout: any) => {
+        try {
+          const workoutDate = new Date(workout.date)
+          return !isNaN(workoutDate.getTime()) && workoutDate >= weekStart && workoutDate <= weekEnd
+        } catch (error) {
+          console.error("Error filtering workout:", workout, error)
+          return false
+        }
+      })
+
+      const totalWeight = weekWorkouts.reduce((sum: number, workout: any) => {
+        try {
+          return sum + (Number(workout.weight))
+        } catch (error) {
+          console.error("Error calculating weight:", workout, error)
+          return sum
+        }
+      }, 0)
+
+      result.push({
+        name: `第${i + 1}周`,
+        value: totalWeight,
+      })
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Error fetching monthly workout data:', error);
+    
+    // Return empty data for all weeks in the month
+    const result = []
+    const totalDays = lastDay.getDate()
+    const totalWeeks = Math.ceil(totalDays / 7)
+    
+    for (let i = 0; i < totalWeeks; i++) {
+      result.push({
+        name: `第${i + 1}周`,
+        value: 0,
+      })
+    }
+    
+    return result;
   }
-
-  return result
 }
 
 export async function getQuarterlyWorkoutData() {
-  const allWorkouts = await getWorkouts()
   const today = new Date()
+  
+  // Calculate date 90 days ago
+  const ninetyDaysAgo = new Date(today)
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+  
+  try {
+    // Format dates for API call
+    const startDateParam = encodeURIComponent(ninetyDaysAgo.toISOString());
+    const endDateParam = encodeURIComponent(today.toISOString());
+    
+    console.log('Fetching quarterly data with date range:', { startDateParam, endDateParam });
+    
+    // Fetch workouts for the last 90 days
+    const response = await fetch(`/api/workouts?startDate=${startDateParam}&endDate=${endDateParam}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-  const result = []
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Failed response from workouts API:', response.status, errorData);
+      throw new Error(`Failed to fetch quarterly workout data: ${response.status}`);
+    }
 
-  // Get data for past 90 days
-  for (let i = 90; i >= 0; i -= 10) {
-    const date = new Date(today)
-    date.setDate(date.getDate() - i)
+    const data = await response.json();
+    const allWorkouts = data.workouts;
+    
+    const result = []
 
-    const dateStr = date.toLocaleDateString("zh-CN", { month: "short", day: "numeric" })
+    // Get data for past 90 days in 10-day increments
+    for (let i = 90; i >= 0; i -= 10) {
+      const date = new Date(today)
+      date.setDate(date.getDate() - i)
 
-    const exercises = ["bench-press", "squat", "deadlift", "pull-up"]
-    const exerciseData: Record<string, number> = {}
+      const dateStr = date.toLocaleDateString("zh-CN", { month: "short", day: "numeric" })
 
-    // Calculate average weight for each exercise 5 days before and after this date
-    exercises.forEach((exercise) => {
-      const rangeWorkouts = allWorkouts.filter((workout) => {
-        const workoutDate = new Date(workout.date)
-        const dayDiff = Math.abs(Math.floor((workoutDate.getTime() - date.getTime()) / (24 * 60 * 60 * 1000)))
-        return dayDiff <= 5 && workout.exercise === exercise
+      // Get all exercises from this period
+      const periodStart = new Date(date)
+      periodStart.setDate(periodStart.getDate() - 5)
+      const periodEnd = new Date(date)
+      periodEnd.setDate(periodEnd.getDate() + 5)
+      
+      // Filter workouts for this period
+      const periodWorkouts = allWorkouts.filter((workout: any) => {
+        try {
+          const workoutDate = new Date(workout.date)
+          return workoutDate >= periodStart && workoutDate <= periodEnd
+        } catch (error) {
+          console.error("Error filtering workout for period:", workout, error)
+          return false
+        }
+      })
+      
+      // Get unique exercises in this period
+      const exercises = Array.from(new Set(periodWorkouts.map((w: any) => w.exerciseId)))
+      const exerciseData: Record<string, number> = {}
+      
+      // Calculate max weight for each exercise in this period
+      exercises.forEach((exerciseId: unknown) => {
+        const exerciseWorkouts = periodWorkouts.filter((w: any) => w.exerciseId === exerciseId)
+        
+        if (exerciseWorkouts.length > 0) {
+          const maxWeight = Math.max(...exerciseWorkouts.map((w: any) => w.weight))
+          exerciseData[getExerciseName(exerciseId as string)] = maxWeight
+        }
+      })
+      
+      // Add default exercises if they don't exist in the data
+      const defaultExercises = ["bench-press", "squat", "deadlift", "pull-up"]
+      defaultExercises.forEach((exercise) => {
+        if (!(getExerciseName(exercise) in exerciseData)) {
+          exerciseData[getExerciseName(exercise)] = 0
+        }
       })
 
-      if (rangeWorkouts.length > 0) {
-        const maxWeight = Math.max(...rangeWorkouts.map((w) => w.weight))
-        exerciseData[getExerciseName(exercise)] = maxWeight
-      } else {
-        exerciseData[getExerciseName(exercise)] = 0
-      }
-    })
+      result.push({
+        date: dateStr,
+        ...exerciseData,
+        frequency: periodWorkouts.length,
+        // Use real data for progress instead of random values
+        progress: calculateProgress(periodWorkouts),
+      })
+    }
 
-    const dayWorkouts = allWorkouts.filter((workout) => {
-      const workoutDate = new Date(workout.date)
-      const dayDiff = Math.abs(Math.floor((workoutDate.getTime() - date.getTime()) / (24 * 60 * 60 * 1000)))
-      return dayDiff <= 5
-    })
+    return result
+  } catch (error) {
+    console.error('Error fetching quarterly workout data:', error);
+    return generateEmptyQuarterlyData();
+  }
+}
 
+// Helper function to calculate progress
+function calculateProgress(workouts: any[]): number {
+  if (workouts.length < 2) return 0;
+  
+  // Sort workouts by date
+  const sortedWorkouts = [...workouts].sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    return dateA - dateB;
+  });
+  
+  // Calculate average weight of first half vs second half
+  const midpoint = Math.floor(sortedWorkouts.length / 2);
+  const firstHalf = sortedWorkouts.slice(0, midpoint);
+  const secondHalf = sortedWorkouts.slice(midpoint);
+  
+  const firstHalfAvg = firstHalf.reduce((sum, w) => sum + w.weight, 0) / firstHalf.length;
+  const secondHalfAvg = secondHalf.reduce((sum, w) => sum + w.weight, 0) / secondHalf.length;
+  
+  // Calculate percentage change
+  if (firstHalfAvg === 0) return 0;
+  const percentChange = ((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100;
+  
+  // Cap at ±30%
+  return Math.max(-30, Math.min(30, Math.round(percentChange)));
+}
+
+// Helper function to generate empty quarterly data
+function generateEmptyQuarterlyData() {
+  const today = new Date();
+  const result = [];
+  
+  for (let i = 90; i >= 0; i -= 10) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
+    
     result.push({
       date: dateStr,
-      ...exerciseData,
-      frequency: dayWorkouts.length,
-      progress: Math.floor(Math.random() * 30) - 5, // Random progress for demo purposes
-    })
+      "卧推": 0,
+      "深蹲": 0,
+      "硬拉": 0,
+      "引体向上": 0,
+      frequency: 0,
+      progress: 0,
+    });
   }
-
-  return result
+  
+  return result;
 }
 
 export async function getConsecutiveWorkoutDays() {
-  const allWorkouts = await getWorkouts()
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+  
+  // Calculate date 30 days ago
+  const thirtyDaysAgo = new Date(today)
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  
+  try {
+    // Format dates for API call
+    const startDateParam = encodeURIComponent(thirtyDaysAgo.toISOString());
+    const endDateParam = encodeURIComponent(today.toISOString());
+    
+    console.log('Fetching consecutive days data with date range:', { startDateParam, endDateParam });
+    
+    // Fetch workouts for the last 30 days
+    const response = await fetch(`/api/workouts?startDate=${startDateParam}&endDate=${endDateParam}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-  let consecutiveDays = 0
-
-  for (let i = 0; i < 30; i++) {
-    // Check up to 30 days back
-    const date = new Date(today)
-    date.setDate(date.getDate() - i)
-    date.setHours(0, 0, 0, 0)
-
-    const dayWorkouts = allWorkouts.filter((workout) => {
-      const workoutDate = new Date(workout.date)
-      workoutDate.setHours(0, 0, 0, 0)
-      return workoutDate.getTime() === date.getTime()
-    })
-
-    if (dayWorkouts.length > 0) {
-      consecutiveDays++
-    } else {
-      break
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Failed response from workouts API:', response.status, errorData);
+      throw new Error(`Failed to fetch consecutive days data: ${response.status}`);
     }
-  }
 
-  return consecutiveDays
+    const data = await response.json();
+    const allWorkouts = data.workouts;
+    
+    let consecutiveDays = 0
+
+    for (let i = 0; i < 30; i++) {
+      // Check up to 30 days back
+      const date = new Date(today)
+      date.setDate(date.getDate() - i)
+      date.setHours(0, 0, 0, 0)
+
+      const dayWorkouts = allWorkouts.filter((workout: any) => {
+        try {
+          const workoutDate = new Date(workout.date)
+          workoutDate.setHours(0, 0, 0, 0)
+          return workoutDate.getTime() === date.getTime()
+        } catch (error) {
+          console.error('Error parsing workout date:', workout.date, error)
+          return false
+        }
+      })
+
+      if (dayWorkouts.length > 0) {
+        consecutiveDays++
+      } else {
+        break
+      }
+    }
+
+    return consecutiveDays
+  } catch (error) {
+    console.error('Error fetching consecutive workout days:', error);
+    return 0;
+  }
 }
 
 function getExerciseName(exerciseId: string): string {
