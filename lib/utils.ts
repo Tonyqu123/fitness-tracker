@@ -1,6 +1,6 @@
 "use client"
 
-import { getWorkouts } from "@/lib/data"
+import { WorkoutWithExercise } from "@/db/dao/workoutDao"
 
 // Simple className utility that doesn't depend on external packages
 export function cn(...classes: (string | undefined | null | false)[]) {
@@ -16,58 +16,101 @@ export function formatDate(date: Date): string {
   })
 }
 
+// 获取当天的训练统计数据
 export async function getDailyWorkoutStats() {
-  const allWorkouts = await getWorkouts()
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  try {
+    const response = await fetch(`/api/workouts/stats?date=${new Date().toISOString()}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-  const todayWorkouts = allWorkouts.filter((workout) => {
-    const workoutDate = new Date(workout.date)
-    workoutDate.setHours(0, 0, 0, 0)
-    return workoutDate.getTime() === today.getTime()
-  })
+    if (!response.ok) {
+      throw new Error('Failed to fetch daily stats');
+    }
 
-  const totalWeight = todayWorkouts.reduce((sum, workout) => sum + workout.weight * workout.reps, 0)
-  const maxWeight = todayWorkouts.length > 0 ? Math.max(...todayWorkouts.map((w) => w.weight)) : 0
-  const exerciseTypes = new Set(todayWorkouts.map((w) => w.exercise))
-
-  return {
-    totalWeight,
-    totalSets: todayWorkouts.length,
-    maxWeight,
-    exerciseCount: exerciseTypes.size,
+    const data = await response.json();
+    return data.stats;
+  } catch (error) {
+    console.error('Error fetching daily stats:', error);
+    return {
+      totalWeight: 0,
+      totalSets: 0,
+      maxWeight: 0,
+      exerciseCount: 0,
+    };
   }
 }
 
+// 获取周训练数据
 export async function getWeeklyWorkoutData() {
-  const allWorkouts = await getWorkouts()
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
   const result = []
   const dayNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
 
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(today)
-    date.setDate(date.getDate() - i)
+  // 计算一周前的日期
+  const weekAgo = new Date(today)
+  weekAgo.setDate(weekAgo.getDate() - 6)
 
-    const dayWorkouts = allWorkouts.filter((workout) => {
-      const workoutDate = new Date(workout.date)
-      workoutDate.setHours(0, 0, 0, 0)
-      return workoutDate.getTime() === date.getTime()
-    })
+  try {
+    // 获取过去一周的训练记录
+    const response = await fetch(`/api/workouts?startDate=${weekAgo.toISOString()}&endDate=${new Date().toISOString()}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-    const totalWeight = dayWorkouts.reduce((sum, workout) => sum + workout.weight * workout.reps, 0)
+    if (!response.ok) {
+      throw new Error('Failed to fetch weekly workout data');
+    }
 
-    result.push({
-      date: date.toISOString().split("T")[0],
-      dayName: dayNames[date.getDay()],
-      totalWeight,
-      totalSets: dayWorkouts.length,
-    })
+    const data = await response.json();
+    const allWorkouts: WorkoutWithExercise[] = data.workouts;
+
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today)
+      date.setDate(date.getDate() - i)
+      
+      const dayWorkouts = allWorkouts.filter((workout) => {
+        const workoutDate = new Date(workout.date)
+        workoutDate.setHours(0, 0, 0, 0)
+        return workoutDate.getTime() === date.getTime()
+      })
+
+      const dayOfWeek = date.getDay()
+      const value = dayWorkouts.reduce((sum, workout) => sum + workout.weight, 0)
+
+      result.push({
+        day: dayNames[dayOfWeek],
+        date: date.toISOString().split("T")[0], // YYYY-MM-DD format
+        value: Math.max(value, 0), // Ensure non-negative value
+      })
+    }
+
+    return result
+  } catch (error) {
+    console.error('Error fetching weekly workout data:', error);
+    
+    // 返回一周的空数据
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today)
+      date.setDate(date.getDate() - i)
+      
+      const dayOfWeek = date.getDay()
+      
+      result.push({
+        day: dayNames[dayOfWeek],
+        date: date.toISOString().split("T")[0],
+        value: 0,
+      })
+    }
+    
+    return result
   }
-
-  return result
 }
 
 export async function getMonthlyWorkoutData() {
