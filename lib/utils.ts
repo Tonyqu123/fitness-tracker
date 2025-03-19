@@ -17,6 +17,15 @@ export function formatDate(date: Date): string {
   })
 }
 
+// 格式化时间为 HH:MM 格式
+export function formatTime(date: Date): string {
+  return date.toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  })
+}
+
 // 获取当天的训练统计数据
 export async function getDailyWorkoutStats() {
   try {
